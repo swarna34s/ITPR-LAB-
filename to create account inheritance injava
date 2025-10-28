@@ -1,0 +1,164 @@
+// Main.java
+// Compile: javac Main.java
+// Run:     java Main
+//
+// Demonstrates inheritance with Account -> SavingAccount, CurrentAccount.
+
+import java.util.Locale;
+
+public class Main {
+    public static void main(String[] args) {
+        Locale.setDefault(Locale.US); // ensure dot decimal in some locales
+
+        try {
+            SavingAccount sa = new SavingAccount("SA-1001", "Alice", 1000.00, 3.5); // 3.5% interest
+            CurrentAccount ca = new CurrentAccount("CA-2001", "Bob", 500.00, 300.00); // 300 overdraft limit
+
+            System.out.println("Initial accounts:");
+            System.out.println(sa);
+            System.out.println(ca);
+            System.out.println();
+
+            // Demonstrate deposit
+            sa.deposit(200.00);
+            ca.deposit(150.00);
+
+            // Demonstrate withdraw
+            sa.withdraw(50.00);
+            // Current account withdraw beyond balance but within overdraft
+            ca.withdraw(900.00); // allowed up to overdraft
+
+            System.out.println("After deposits and withdrawals:");
+            System.out.println(sa);
+            System.out.println(ca);
+            System.out.println();
+
+            // Apply interest to saving account
+            sa.applyInterest();
+            System.out.println("After applying interest to saving account:");
+            System.out.println(sa);
+            System.out.println();
+
+            // Polymorphism example
+            Account[] accounts = { sa, ca };
+            System.out.println("Account summaries (polymorphism):");
+            for (Account a : accounts) {
+                System.out.println(a.getSummary());
+            }
+
+            // Attempt to withdraw too much from current account (beyond overdraft)
+            try {
+                ca.withdraw(200.00); // this should fail
+            } catch (InsufficientFundsException ex) {
+                System.out.println();
+                System.out.println("Failed withdrawal: " + ex.getMessage());
+            }
+
+        } catch (IllegalArgumentException | InsufficientFundsException ex) {
+            System.err.println("Error: " + ex.getMessage());
+        }
+    }
+}
+
+// Base class
+abstract class Account {
+    protected String accountNumber;
+    protected String holderName;
+    protected double balance;
+
+    public Account(String accountNumber, String holderName, double initialBalance) {
+        if (accountNumber == null || holderName == null) throw new IllegalArgumentException("Account number and holder name required.");
+        if (initialBalance < 0) throw new IllegalArgumentException("Initial balance cannot be negative.");
+        this.accountNumber = accountNumber;
+        this.holderName = holderName;
+        this.balance = initialBalance;
+    }
+
+    public void deposit(double amount) {
+        if (amount <= 0) throw new IllegalArgumentException("Deposit amount must be positive.");
+        balance += amount;
+    }
+
+    // withdraw may be overridden in subclasses
+    public void withdraw(double amount) throws InsufficientFundsException {
+        if (amount <= 0) throw new IllegalArgumentException("Withdrawal amount must be positive.");
+        if (balance < amount) throw new InsufficientFundsException("Insufficient funds. Available: " + String.format("%.2f", balance));
+        balance -= amount;
+    }
+
+    public double getBalance() {
+        return balance;
+    }
+
+    public String getSummary() {
+        return String.format("%s (%s): balance = %.2f", holderName, accountNumber, balance);
+    }
+
+    @Override
+    public String toString() {
+        return String.format("Account[%s] holder=%s balance=%.2f", accountNumber, holderName, balance);
+    }
+}
+
+// Saving account with interest
+class SavingAccount extends Account {
+    private double annualInterestRatePercent; // e.g., 3.5 means 3.5%
+
+    public SavingAccount(String accountNumber, String holderName, double initialBalance, double annualInterestRatePercent) {
+        super(accountNumber, holderName, initialBalance);
+        if (annualInterestRatePercent < 0) throw new IllegalArgumentException("Interest rate cannot be negative.");
+        this.annualInterestRatePercent = annualInterestRatePercent;
+    }
+
+    // Apply interest once (simple interest, not compounded here)
+    public void applyInterest() {
+        double interest = balance * (annualInterestRatePercent / 100.0);
+        balance += interest;
+    }
+
+    public double getInterestRate() {
+        return annualInterestRatePercent;
+    }
+
+    @Override
+    public String toString() {
+        return String.format("SavingAccount[%s] holder=%s balance=%.2f rate=%.2f%%", accountNumber, holderName, balance, annualInterestRatePercent);
+    }
+}
+
+// Current (checking) account with overdraft facility
+class CurrentAccount extends Account {
+    private double overdraftLimit; // positive value, e.g., 300 means can go down to -300
+
+    public CurrentAccount(String accountNumber, String holderName, double initialBalance, double overdraftLimit) {
+        super(accountNumber, holderName, Math.max(initialBalance, 0)); // do not allow negative initial balance
+        if (overdraftLimit < 0) throw new IllegalArgumentException("Overdraft limit cannot be negative.");
+        this.overdraftLimit = overdraftLimit;
+    }
+
+    @Override
+    public void withdraw(double amount) throws InsufficientFundsException {
+        if (amount <= 0) throw new IllegalArgumentException("Withdrawal amount must be positive.");
+        double allowedNegative = -overdraftLimit;
+        if (balance - amount < allowedNegative) {
+            throw new InsufficientFundsException(String.format("Exceeded overdraft limit. Available (including overdraft): %.2f", balance + overdraftLimit));
+        }
+        balance -= amount;
+    }
+
+    public double getOverdraftLimit() {
+        return overdraftLimit;
+    }
+
+    @Override
+    public String toString() {
+        return String.format("CurrentAccount[%s] holder=%s balance=%.2f overdraft=%.2f", accountNumber, holderName, balance, overdraftLimit);
+    }
+}
+
+// Custom exception for insufficient funds
+class InsufficientFundsException extends Exception {
+    public InsufficientFundsException(String message) {
+        super(message);
+    }
+}
